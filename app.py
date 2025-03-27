@@ -1,12 +1,12 @@
-<<<<<<< HEAD
+
+import json
 from flask import Flask, request, jsonify
+import os
 
 app = Flask(__name__)
-
 # Хранение данных в памяти
 categories = [] 
 items = []     
-=======
 import json
 from flask import Flask, request, jsonify
 import os
@@ -16,16 +16,16 @@ app = Flask(__name__)
 categories = [] 
 items = []     
 customers = []
->>>>>>> Nuras
+customers = []
 
 # Уникальные идентификаторы
 category_id_counter = 1
 item_id_counter = 1
-<<<<<<< HEAD
-=======
+
 customer_id = 1
 
->>>>>>> Nuras
+customer_id = 1
+
 
 # Создание категории
 @app.route('/category', methods=['POST'])
@@ -55,17 +55,23 @@ def create_category():
 
     return jsonify({'message': 'Category created successfully', 'category': new_category}), 201
 
-<<<<<<< HEAD
+
 # Добавление товара
 @app.route('/item', methods=['POST'])
-=======
+
 @app.route('/categories', methods=['GET'])
 def get_categories():
     return jsonify(categories), 200
 
 # Добавление товара
 @app.route('/items', methods=['POST'])
->>>>>>> Nuras
+
+@app.route('/categories', methods=['GET'])
+def get_categories():
+    return jsonify(categories), 200
+
+# Добавление товара
+@app.route('/items', methods=['POST'])
 def add_item():
     global item_id_counter
     data = request.json
@@ -106,8 +112,6 @@ def filter_items():
     return jsonify(filtered_items)
 
 
-<<<<<<< HEAD
-=======
 ##############################################################
 
 
@@ -196,6 +200,41 @@ def add_to_basket(customer_id):
     return jsonify({'message': 'Item added to basket successfully'}), 200
 
 
->>>>>>> Nuras
+
+#Отчет т товарах и корзине 
+
+@app.route('/report', methods=['GET'])
+def generate_report():
+    report = {
+        'available_items': items,
+        'customers_baskets': [
+            {
+                'customers_id': c['id'],
+                'username': c['username'],
+                'basket': c['basket'],
+                'total': sum(item['price'] * item['quantity'] for item in c['basket'])
+            }
+            for c in customers if c['basket']
+        ]
+    }
+    return jsonify(report)
+
+#Воспомогательные маршруты  для тестирования
+
+@app.route('/')
+def home():
+    return """
+    <h1>Интернет-магазин API</h1>
+    <p>Доступные эндпоинты:</p>
+    <ul>
+        <li>POST /customers - Создать аккаунт покупателя</li>
+        <li>POST /customers/&lt;id&gt;/basket - Добавить товар в корзину</li>
+        <li>GET /items/search?keyword=... - Поиск товаров</li>
+        <li>GET /report - Отчет по товарам и корзинам</li>
+        <li>POST /items - Добавить товар (для теста)</li>
+    </ul>
+    """
+
+
 if __name__ == '__main__':
     app.run(debug=True)
