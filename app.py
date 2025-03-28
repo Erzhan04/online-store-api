@@ -13,6 +13,10 @@ category_id_counter = 1
 item_id_counter = 1
 customer_id = 1
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> 68e1912 (добавил тест)
 # Создание категории
 @app.route('/category', methods=['POST'])
 def create_category():
@@ -39,7 +43,10 @@ def create_category():
 
     return jsonify({'message': 'Category created successfully', 'category': new_category}), 201
 
+<<<<<<< HEAD
 # Получение всех категорий
+=======
+>>>>>>> 68e1912 (добавил тест)
 @app.route('/categories', methods=['GET'])
 def get_categories():
     return jsonify(categories), 200
@@ -76,6 +83,25 @@ def add_item():
     return jsonify({'message': 'Item added successfully', 'item': new_item}), 201
 
 # Фильтрация товаров
+<<<<<<< HEAD
+=======
+@app.route('/items', methods=['GET'])
+def filter_items():
+    keyword = request.args.get('keyword', '').lower()
+    filtered_items = [item for item in items if keyword in item['name'].lower()]
+    return jsonify(filtered_items)
+
+
+##############################################################
+
+
+#Счетчик ID
+
+
+
+# Функцияя фильтрации товаров по ключевому слову
+
+>>>>>>> 68e1912 (добавил тест)
 @app.route('/items/search', methods=['GET'])
 def search_items():
     keyword = request.args.get('keyword', '').lower()
