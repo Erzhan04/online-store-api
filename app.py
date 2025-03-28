@@ -43,6 +43,7 @@ def create_category():
     return jsonify({'message': 'Category created successfully', 'category': new_category}), 201
 
 
+# Получение всех категорий
 @app.route('/categories', methods=['GET'])
 def get_categories():
     return jsonify(categories), 200
@@ -97,7 +98,6 @@ def filter_items():
 
 
 # Функцияя фильтрации товаров по ключевому слову
-
 @app.route('/items/search', methods=['GET'])
 
 def search_items():
