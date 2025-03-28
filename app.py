@@ -7,7 +7,7 @@ app = Flask(__name__)
 categories = [] 
 items = []     
 customers = []
-
+baskets = {}
 # Уникальные идентификаторы
 category_id_counter = 1
 item_id_counter = 1
@@ -51,33 +51,28 @@ def get_categories():
 def add_item():
     global item_id_counter
     data = request.json
-    name = data.get('name')
-    image = data.get('image')  
-    quantity = data.get('quantity')
-    price = data.get('price')
-    category_id = data.get('category_id')
-
+    
     # Проверка обязательных полей
-    if not all([name, quantity, price, category_id]):
+    required_fields = ['name', 'quantity', 'price', 'category_id']
+    if not all(field in data for field in required_fields):
         return jsonify({'error': 'Missing required fields'}), 400
-
-    # Проверка, что категория существует
-    category_exists = any(cat['id'] == category_id for cat in categories)
-    if not category_exists:
+    
+    # Проверка существования категории
+    if not any(cat['id'] == data['category_id'] for cat in categories):
         return jsonify({'error': 'Category does not exist'}), 404
-
+    
     # Создание нового товара
     new_item = {
         'id': item_id_counter,
-        'name': name,
-        'image': image,
-        'quantity': quantity,
-        'price': price,
-        'category_id': category_id
+        'name': data['name'],
+        'quantity': data['quantity'],
+        'price': data['price'],
+        'category_id': data['category_id'],
+        'image': data.get('image', '')  # Необязательное поле
     }
     items.append(new_item)
     item_id_counter += 1
-
+    
     return jsonify({'message': 'Item added successfully', 'item': new_item}), 201
 
 # Фильтрация товаров
@@ -163,14 +158,15 @@ def add_to_basket(customer_id):
     if not item:
         return jsonify({'error': 'Item not found'}), 404
 
-    if item['quantity'] < data['quantity']:
-        return jsonify({'error': 'Not enough items in stock'}), 400
-
-    customer['basket'].append({
+    # Добавление в корзину
+    if customer_id not in baskets:
+        baskets[customer_id] = []
+        
+    baskets[customer_id].append({
         'item_id': data['item_id'],
         'quantity': data['quantity'],
-        'price': item['price'],
-        'name': item['name']
+        'name': item['name'],
+        'price': item['price']
     })
     
     return jsonify({'message': 'Item added to basket successfully'}), 200
@@ -185,12 +181,12 @@ def generate_report():
         'available_items': items,
         'customers_baskets': [
             {
-                'customers_id': c['id'],
+                'customer_id': c['id'],
                 'username': c['username'],
-                'basket': c['basket'],
-                'total': sum(item['price'] * item['quantity'] for item in c['basket'])
+                'basket': baskets.get(c['id'], []),
+                'total': sum(item['price'] * item['quantity'] for item in baskets.get(c['id'], []))
             }
-            for c in customers if c['basket']
+            for c in customers
         ]
     }
     return jsonify(report)
