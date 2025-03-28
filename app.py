@@ -1,3 +1,4 @@
+  
 import json
 from flask import Flask, request, jsonify
 import os
@@ -11,8 +12,8 @@ baskets = {}
 # Уникальные идентификаторы
 category_id_counter = 1
 item_id_counter = 1
-customer_id = 1
 
+customer_id = 1
 
 # Создание категории
 @app.route('/category', methods=['POST'])
@@ -42,6 +43,8 @@ def create_category():
 
     return jsonify({'message': 'Category created successfully', 'category': new_category}), 201
 
+
+# Получение всех категорий
 @app.route('/categories', methods=['GET'])
 def get_categories():
     return jsonify(categories), 200
@@ -91,7 +94,6 @@ def filter_items():
 
 
 # Функцияя фильтрации товаров по ключевому слову
-
 @app.route('/items/search', methods=['GET'])
 
 def search_items():
