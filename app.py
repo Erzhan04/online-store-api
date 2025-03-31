@@ -1,7 +1,78 @@
-  
 import json
 from flask import Flask, request, jsonify
 import os
+import sqlite3
+
+app = Flask(__name__)
+
+app.config['DB_PATH'] = 'shop.db'
+DB_PATH = app.config['DB_PATH']
+
+
+def get_db():
+    db_path = app.config.get('DB_PATH', 'shop.db')
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def init_db():
+    db_path = app.config.get('DB_PATH', 'shop.db')
+    
+    if os.path.exists(db_path):
+        print(f"База данных {db_path} уже существует")
+    else:
+        print(f"Создаётся новая база данных {db_path}")
+    
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute('''CREATE TABLE IF NOT EXISTS test (id INTEGER PRIMARY KEY, name TEXT)''')
+        cursor.execute(''' CREATE TABLE IF NOT EXISTS categories (
+                           id INTEGER PRIMARY KEY AUTOINCREMENT,
+                           name TEXT NOT NULL,
+                           parent_id INTEGER,
+                           FOREIGN KEY (parent_id) REFERENCES categories(id)
+                           )''')
+        cursor.execute(''' CREATE TABLE IF NOT EXISTS items (
+                           id INTEGER PRIMARY KEY AUTOINCREMENT,
+                           name TEXT NOT NULL,
+                           image TEXT,
+                           quantity INTEGER NOT NULL,
+                           price REAL NOT NULL,
+                           category_id INTEGER NOT NULL,
+                           FOREIGN KEY (category_id) REFERENCES categories(id)
+                           )''')
+        cursor.execute('''CREATE TABLE IF NOT EXISTS customers (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        username TEXT UNIQUE NOT NULL,
+                        password TEXT NOT NULL,
+                        email TEXT UNIQUE NOT NULL
+                    )''')
+        cursor.execute('''CREATE TABLE IF NOT EXISTS baskets (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        customer_id INTEGER NOT NULL,
+                        item_id INTEGER NOT NULL,
+                        quantity INTEGER NOT NULL,
+                        FOREIGN KEY (customer_id) REFERENCES customers(id),
+                        FOREIGN KEY (item_id) REFERENCES items(id)
+                    )''')
+        conn.commit()
+    except sqlite3.Error as e:
+        print(f"Ошибка при инициализации базы данных: {e}")
+    finally:
+        conn.close()
+
+def query_db(query, args=(), one=False):
+    "Функция для выполнения SQL-запросов."
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute(query, args)
+        rv = cur.fetchall()
+        conn.commit()
+        return (rv[0] if rv else None) if one else rv
+    finally:
+        conn.close()
 
 app = Flask(__name__)
 # Хранение данных в памяти
@@ -27,32 +98,29 @@ def create_category():
         return jsonify({'error': 'Name is required'}), 400
 
     ### Проверка родителскую категрию
-    if parent_id is not None:
-        parent_exists = any(cat['id'] == parent_id for cat in categories)
-        if not parent_exists:
+    if parent_id:
+        parent = query_db('SELECT id FROM categories WHERE id = ?', [parent_id], one=True)
+        if not parent:
             return jsonify({'error': 'Parent category does not exist'}), 400
 
-    # Создание новой категории
-    new_category = {
-        'id': category_id_counter,
-        'name': name,
-        'parent_id': parent_id
-    }
-    categories.append(new_category)
-    category_id_counter += 1
-
-    return jsonify({'message': 'Category created successfully', 'category': new_category}), 201
-
+    query_db('INSERT INTO categories (name, parent_id) VALUES (?, ?)', (name, parent_id))
+    category = query_db('SELECT * FROM categories ORDER BY id DESC LIMIT 1', one=True)
+    
+    return jsonify({
+        'message': 'Category created successfully',
+        'category': dict(category)
+    }), 201
 
 # Получение всех категорий
 @app.route('/categories', methods=['GET'])
 def get_categories():
-    return jsonify(categories), 200
+    categories = query_db('SELECT * FROM categories')
+    categories_list = [dict(category) for category in categories]
+    return jsonify(categories_list), 200
 
 # Добавление товара
 @app.route('/items', methods=['POST'])
 def add_item():
-    global item_id_counter
     data = request.json
     
     # Проверка обязательных полей
@@ -61,29 +129,26 @@ def add_item():
         return jsonify({'error': 'Missing required fields'}), 400
     
     # Проверка существования категории
-    if not any(cat['id'] == data['category_id'] for cat in categories):
+    category = query_db('SELECT id FROM categories WHERE id = ?', [data['category_id']], one=True)
+    if not category:
         return jsonify({'error': 'Category does not exist'}), 404
     
     # Создание нового товара
-    new_item = {
-        'id': item_id_counter,
-        'name': data['name'],
-        'quantity': data['quantity'],
-        'price': data['price'],
-        'category_id': data['category_id'],
-        'image': data.get('image', '')  # Необязательное поле
-    }
-    items.append(new_item)
-    item_id_counter += 1
+    query_db('''
+    INSERT INTO items (name, image, quantity, price, category_id)
+    VALUES (?, ?, ?, ?, ?)
+    ''', (data['name'], data.get('image', ''), data['quantity'], data['price'], data['category_id']))
+    item = query_db("SELECT * FROM items ORDER BY id DESC LIMIT 1", one=True)
     
-    return jsonify({'message': 'Item added successfully', 'item': new_item}), 201
+    return jsonify({'message': 'Item added successfully', 'item': dict(item)}), 201
+
 
 # Фильтрация товаров
 @app.route('/items', methods=['GET'])
 def filter_items():
     keyword = request.args.get('keyword', '').lower()
-    filtered_items = [item for item in items if keyword in item['name'].lower()]
-    return jsonify(filtered_items)
+    items = query_db("SELECT * FROM items WHERE LOWER(name) LIKE ?", [f'%{keyword}%'])
+    return jsonify([dict(item) for item in items])
 
 
 ##############################################################
@@ -105,93 +170,106 @@ def search_items():
 # Создание учетной записи покупателя
 @app.route('/customers', methods=['POST'])
 def create_customer():
-    global customer_id
     data = request.json
     
     required_fields = ['username', 'password', 'email']
+
     if not all(field in data for field in required_fields):
-        return jsonify({'error': 'Missing required fields'}), 400  #
+        return jsonify({'error': 'Missing required fields'}), 400
     
     # Проверка уникальности username
-    if any(customer['username'] == data['username'] for customer in customers):
-        return jsonify({'error': 'Username already exists'}), 400 
+    if query_db('SELECT id FROM customers WHERE username = ?', [data['username']], one=True):
+        return jsonify({'error': 'Username already exists'}), 400
+    if query_db("SELECT id FROM customers WHERE email = ?", [data['email']], one=True):
+        return jsonify({'error': 'Email already exists'}), 400
     
-    new_customer = {
-        'id': customer_id,
-        'username': data['username'],
-        'password': data['password'], 
-        'email': data['email'],
-        'basket': []
-    }
-    
-    customers.append(new_customer)
-    customer_id += 1
-    
-    return jsonify({'message': 'Customer created successfully', 'customer': new_customer}), 201
+    password = data['password']
+    query_db('INSERT INTO customers (username, password, email) VALUES (?, ?, ?)', [data['username'], password,data['email']])
 
+    customer = query_db('SELECT * FROM customers ORDER BY id DESC LIMIT 1', one=True)
+    return jsonify({'message': 'Customer created successfully', 'customer': dict(customer)}), 201
+
+
+# Получение списка покупателей
 @app.route('/customers', methods=['GET'])
 def get_customers():
-    return jsonify(customers), 200
+    customers = query_db('SELECT * FROM customers')
+    return jsonify([dict(customer) for customer in customers]), 200
 
 
-# Добавление товара в корзину (новый метод)
+
+# Добавление товара в корзину
 @app.route('/customers/<int:customer_id>/basket', methods=['POST'])
 def add_to_basket(customer_id):
     data = request.json
     
     if 'item_id' not in data or 'quantity' not in data:
         return jsonify({'error': 'Missing item_id or quantity'}), 400
-
-    # Поиск покупателя
-    customer = None
-    for c in customers:
-        if c['id'] == customer_id:
-            customer = c
-            break
+    
+    # Проверка покупателя
+    customer = query_db('SELECT id FROM customers WHERE id = ?', [customer_id], one=True)
     if not customer:
         return jsonify({'error': 'Customer not found'}), 404
-
-    # Поиск товара
-    item = None
-    for i in items:
-        if i['id'] == data['item_id']:
-            item = i
-            break
+    
+    # Проверка товара
+    item = query_db('SELECT * FROM items WHERE id = ?', [data['item_id']], one=True)
     if not item:
         return jsonify({'error': 'Item not found'}), 404
-
+    
+    if item['quantity'] < data['quantity']:
+        return jsonify({'error': 'Not enough items in stock'}), 400
+    
     # Добавление в корзину
-    if customer_id not in baskets:
-        baskets[customer_id] = []
-        
-    baskets[customer_id].append({
-        'item_id': data['item_id'],
-        'quantity': data['quantity'],
-        'name': item['name'],
-        'price': item['price']
-    })
+    query_db('''
+    INSERT INTO baskets (customer_id, item_id, quantity)
+    VALUES (?, ?, ?)
+    ''', [customer_id, data['item_id'], data['quantity']])
     
     return jsonify({'message': 'Item added to basket successfully'}), 200
 
+# Получение корзины покупателя
+@app.route('/customers/<int:customer_id>/basket', methods=['GET'])
+def get_basket(customer_id):
+    basket_items = query_db('''
+    SELECT b.id, i.name, i.price, b.quantity 
+    FROM baskets b
+    JOIN items i ON b.item_id = i.id
+    WHERE b.customer_id = ?
+    ''', [customer_id])
+    
+    return jsonify([dict(item) for item in basket_items]), 200
 
-
-#Отчет т товарах и корзине 
-
+# Отчет по товарам и корзинам
 @app.route('/report', methods=['GET'])
 def generate_report():
-    report = {
-        'available_items': items,
-        'customers_baskets': [
-            {
-                'customer_id': c['id'],
-                'username': c['username'],
-                'basket': baskets.get(c['id'], []),
-                'total': sum(item['price'] * item['quantity'] for item in baskets.get(c['id'], []))
-            }
-            for c in customers
-        ]
-    }
-    return jsonify(report)
+    # Все товары
+    available_items = query_db('SELECT * FROM items')
+    
+    # Корзины всех пользователей
+    customers_baskets = []
+    customers = query_db('SELECT * FROM customers')
+    
+    for customer in customers:
+        basket = query_db('''
+        SELECT i.name, i.price, b.quantity
+        FROM baskets b
+        JOIN items i ON b.item_id = i.id
+        WHERE b.customer_id = ?
+        ''', [customer['id']])
+        
+        total = sum(float(item['price']) * int(item['quantity']) for item in basket)
+        
+        customers_baskets.append({
+            'customer_id': customer['id'],
+            'username': customer['username'],
+            'basket': [dict(item) for item in basket],
+            'total': total
+        })
+    
+    return jsonify({
+        'available_items': [dict(item) for item in available_items],
+        'customers_baskets': customers_baskets
+    })
 
 #Воспомогательные маршруты  для тестирования
 
@@ -211,4 +289,5 @@ def home():
 
 
 if __name__ == '__main__':
+    init_db()  # ← Важная строка! Создаёт таблицы при первом запуске
     app.run(debug=True)
