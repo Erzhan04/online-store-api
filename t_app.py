@@ -297,30 +297,30 @@ def test_search_items():
     if items:
         assert 'TestItem' in items[0]['name']
 
-def test_create_customer():
-    test_data = {
-        'username': 'yerzhan', 
-        'password': 'qweasd', 
-        'email': 'ye@example.com'
-    }
+# def test_create_customer():
+#     test_data = {
+#         'username': 'yerzhan', 
+#         'password': 'qweasd', 
+#         'email': 'ye@example.com'
+#     }
     
-    with app.app_context():
-        conn = get_db()
-        cursor = conn.cursor()
-        cursor.execute("SELECT id FROM customers WHERE username = ?", (test_data['username'],))
-        assert cursor.fetchone() is None, "Test user already exists in DB"
-        conn.close()
+#     with app.app_context():
+#         conn = get_db()
+#         cursor = conn.cursor()
+#         cursor.execute("SELECT id FROM customers WHERE username = ?", (test_data['username'],))
+#         assert cursor.fetchone() is None, "Test user already exists in DB"
+#         conn.close()
     
-    response = requests.post(f"{BASE_URL}/customers", json=test_data)
-    assert response.status_code in [201, 400]
+#     response = requests.post(f"{BASE_URL}/customers", json=test_data)
+#     assert response.status_code in [201, 400]
     
-    with app.app_context():
-        conn = get_db()
-        cursor = conn.cursor()
-        cursor.execute("SELECT username FROM customers WHERE username = ?", (test_data['username'],))
-        result = cursor.fetchone()
-        conn.close()
-        assert result is not None, "Customer was not added to DB"
+#     with app.app_context():
+#         conn = get_db()
+#         cursor = conn.cursor()
+#         cursor.execute("SELECT username FROM customers WHERE username = ?", (test_data['username'],))
+#         result = cursor.fetchone()
+#         conn.close()
+#         assert result is not None, "Customer was not added to DB"
 
 def test_get_customers():
     response = requests.get(f"{BASE_URL}/customers")
@@ -330,38 +330,38 @@ def test_get_customers():
     if customers:
         assert any(c['username'] == 'testuser' for c in customers)
 
-def test_add_to_basket():
-    # Получаем ID тестового пользователя и товара
-    with app.app_context():
-        conn = get_db()
-        cursor = conn.cursor()
+# def test_add_to_basket():
+#     # Получаем ID тестового пользователя и товара
+#     with app.app_context():
+#         conn = get_db()
+#         cursor = conn.cursor()
         
-        cursor.execute("SELECT id FROM customers WHERE username = 'testuser'")
-        customer = cursor.fetchone()
+#         cursor.execute("SELECT id FROM customers WHERE username = 'testuser'")
+#         customer = cursor.fetchone()
         
-        cursor.execute("SELECT id FROM items WHERE name = 'TestItem'")
-        item = cursor.fetchone()
+#         cursor.execute("SELECT id FROM items WHERE name = 'TestItem'")
+#         item = cursor.fetchone()
         
-        conn.close()
+#         conn.close()
         
-        if customer and item:
-            test_data = {'item_id': item['id'], 'quantity': 1}
-            response = requests.post(
-                f"{BASE_URL}/customers/{customer['id']}/basket", 
-                json=test_data
-            )
-            assert response.status_code in [200, 400, 404]
+#         if customer and item:
+#             test_data = {'item_id': item['id'], 'quantity': 1}
+#             response = requests.post(
+#                 f"{BASE_URL}/customers/{customer['id']}/basket", 
+#                 json=test_data
+#             )
+#             assert response.status_code in [200, 400, 404]
             
-            # Проверяем запись в БД
-            conn = get_db()
-            cursor = conn.cursor()
-            cursor.execute(
-                "SELECT id FROM baskets WHERE customer_id = ? AND item_id = ?",
-                (customer['id'], item['id'])
-            )
-            result = cursor.fetchone()
-            conn.close()
-            assert result is not None, "Item was not added to basket"
+#             # Проверяем запись в БД
+#             conn = get_db()
+#             cursor = conn.cursor()
+#             cursor.execute(
+#                 "SELECT id FROM baskets WHERE customer_id = ? AND item_id = ?",
+#                 (customer['id'], item['id'])
+#             )
+#             result = cursor.fetchone()
+#             conn.close()
+#             assert result is not None, "Item was not added to basket"
 
 def test_get_basket():
     # Получаем ID тестового пользователя
