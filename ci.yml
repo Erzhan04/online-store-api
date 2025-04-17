@@ -27,7 +27,7 @@ jobs:
 
       - name: Запускаем тесты
         run: |
-          pytest test_app.py
+          pytest t_app.py
 
   docker-build-and-push:
     needs: build-and-test
@@ -48,4 +48,4 @@ jobs:
         with:
           context: .
           push: true
-          tags: yourdockerhub/internet-shop:latest
+          tags: erzhan04/internet-shop:latest
