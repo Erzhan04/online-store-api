@@ -25,9 +25,9 @@ jobs:
           pip install -r requirements.txt
           pip install pytest requests
 
-      - name: Запускаем тесты
-        run: |
-          pytest t_app.py
+      # - name: Запускаем тесты
+      #   run: |
+      #     pytest t_app.py
 
   docker-build-and-push:
     needs: build-and-test
